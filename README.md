@@ -49,4 +49,5 @@ func UseHistogram(req *someRequest) someResponse {
 When adding a histogram, the library will create both a `summary` and `histogram`. The summary is currently hard-coded
 to use the following percentiles: `0.5 / 0.75 / 0.9 / 0.95 / 0.99 / 0.999`. This should cover most use cases. As for the
 histogram, this is currently using the default buckets from the Prometheus library, which will not fit all use cases. It will
-work correctly for simple network traffic.
+work correctly for simple network traffic, but not for cases which typically have a higher value (more than one second).
+The buckets are currently not configurable.
