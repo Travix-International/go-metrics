@@ -10,18 +10,22 @@ import (
 )
 
 type (
+	// Metrics provides a set of conviencience functions that wrap Prometheus
 	Metrics struct {
 		Namespace     string
 		Counters      map[string]prometheus.Counter
 		CounterVecs   map[string]*prometheus.CounterVec
 		Summaries     map[string]prometheus.Summary
 		Histograms    map[string]prometheus.Histogram
-		Loggy         *logger.Logger
+		Gauges        map[string]prometheus.Gauge
+		Logger        *logger.Logger
 		countMutex    *sync.Mutex
 		countVecMutex *sync.Mutex
 		histMutex     *sync.Mutex
+		gaugeMutex    *sync.Mutex
 	}
 
+	// MetricsHistogram combines a histogram and summary
 	MetricsHistogram struct {
 		Key  string
 		hist prometheus.Histogram
@@ -29,17 +33,20 @@ type (
 	}
 )
 
-func NewMetrics(namespace string, loggy *logger.Logger) *Metrics {
+// NewMetrics will instantiate a new Metrics wrapper object
+func NewMetrics(namespace string, logger *logger.Logger) *Metrics {
 	m := Metrics{
 		Namespace:     namespace,
-		Loggy:         loggy,
+		Logger:        logger,
 		Counters:      make(map[string]prometheus.Counter),
 		CounterVecs:   make(map[string]*prometheus.CounterVec),
 		Histograms:    make(map[string]prometheus.Histogram),
 		Summaries:     make(map[string]prometheus.Summary),
+		Gauges:        make(map[string]prometheus.Gauge),
 		countMutex:    &sync.Mutex{},
 		countVecMutex: &sync.Mutex{},
 		histMutex:     &sync.Mutex{},
+		gaugeMutex:    &sync.Mutex{},
 	}
 	return &m
 }
@@ -61,11 +68,35 @@ func (ctx *Metrics) Count(subsystem, name, help string) {
 		ctx.Counters[key] = counter
 		err := prometheus.Register(counter)
 		if err != nil {
-			ctx.Loggy.Warn("MetricsCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration failed", counter, err))
+			ctx.Logger.Warn("MetricsCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration %v failed: %v", counter, err))
 		}
 	}
 
 	counter.Inc()
+}
+
+func (ctx *Metrics) SetGauge(value float64, subsystem, name, help string) {
+	ctx.gaugeMutex.Lock()
+	defer ctx.gaugeMutex.Unlock()
+
+	key := fmt.Sprintf("%s/%s", subsystem, name)
+	gauge, exists := ctx.Gauges[key]
+
+	if !exists {
+		gauge = prometheus.NewGauge(prometheus.GaugeOpts{
+			Namespace: ctx.Namespace,
+			Subsystem: subsystem,
+			Name:      name,
+			Help:      help,
+		})
+		ctx.Gauges[key] = gauge
+		err := prometheus.Register(gauge)
+		if err != nil {
+			ctx.Logger.Warn("MetricsSetGaugeFailed", fmt.Sprintf("SetGauge: Gauge registration %v failed: %v", gauge, err))
+		}
+	}
+
+	gauge.Set(value)
 }
 
 func (ctx *Metrics) CountLabels(subsystem, name, help string, labels, values []string) {
@@ -85,7 +116,7 @@ func (ctx *Metrics) CountLabels(subsystem, name, help string, labels, values []s
 		ctx.CounterVecs[key] = counter
 		err := prometheus.Register(counter)
 		if err != nil {
-			ctx.Loggy.Warn("MetricsCounterLabelRegistrationFailed", fmt.Sprintf("CounterLabelHandler: Counter registration failed", counter, err))
+			ctx.Logger.Warn("MetricsCounterLabelRegistrationFailed", fmt.Sprintf("CounterLabelHandler: Counter registration %v failed: %v", counter, err))
 		}
 	}
 
@@ -109,7 +140,7 @@ func (ctx *Metrics) IncreaseCounter(subsystem, name, help string, increment int)
 		ctx.Counters[key] = counter
 		err := prometheus.Register(counter)
 		if err != nil {
-			ctx.Loggy.Warn("MetricsIncreaseCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration failed: %v: %v", counter, err))
+			ctx.Logger.Warn("MetricsIncreaseCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration failed: %v: %v", counter, err))
 		}
 	}
 
