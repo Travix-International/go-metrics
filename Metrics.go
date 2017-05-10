@@ -19,10 +19,10 @@ type (
 		Histograms    map[string]prometheus.Histogram
 		Gauges        map[string]prometheus.Gauge
 		Logger        *logger.Logger
-		countMutex    *sync.Mutex
-		countVecMutex *sync.Mutex
-		histMutex     *sync.Mutex
-		gaugeMutex    *sync.Mutex
+		countMutex    *sync.RWMutex
+		countVecMutex *sync.RWMutex
+		histMutex     *sync.RWMutex
+		gaugeMutex    *sync.RWMutex
 	}
 
 	// MetricsHistogram combines a histogram and summary
@@ -43,139 +43,162 @@ func NewMetrics(namespace string, logger *logger.Logger) *Metrics {
 		Histograms:    make(map[string]prometheus.Histogram),
 		Summaries:     make(map[string]prometheus.Summary),
 		Gauges:        make(map[string]prometheus.Gauge),
-		countMutex:    &sync.Mutex{},
-		countVecMutex: &sync.Mutex{},
-		histMutex:     &sync.Mutex{},
-		gaugeMutex:    &sync.Mutex{},
+		countMutex:    &sync.RWMutex{},
+		countVecMutex: &sync.RWMutex{},
+		histMutex:     &sync.RWMutex{},
+		gaugeMutex:    &sync.RWMutex{},
 	}
 	return &m
 }
 
 func (ctx *Metrics) Count(subsystem, name, help string) {
-	ctx.countMutex.Lock()
-	defer ctx.countMutex.Unlock()
-
+	ctx.countMutex.RLock()
 	key := fmt.Sprintf("%s/%s", subsystem, name)
 	counter, exists := ctx.Counters[key]
+	ctx.countMutex.RUnlock()
 
 	if !exists {
-		counter = prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: ctx.Namespace,
-			Subsystem: subsystem,
-			Name:      name,
-			Help:      help,
-		})
-		ctx.Counters[key] = counter
-		err := prometheus.Register(counter)
-		if err != nil {
-			ctx.Logger.Warn("MetricsCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration %v failed: %v", counter, err))
+		ctx.countMutex.Lock()
+		if counter, exists = ctx.Counters[key]; !exists {
+			counter = prometheus.NewCounter(prometheus.CounterOpts{
+				Namespace: ctx.Namespace,
+				Subsystem: subsystem,
+				Name:      name,
+				Help:      help,
+			})
+			ctx.Counters[key] = counter
+			err := prometheus.Register(counter)
+			if err != nil {
+				ctx.Logger.Warn("MetricsCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration %v failed: %v", counter, err))
+			}
 		}
+		ctx.countMutex.Unlock()
 	}
 
 	counter.Inc()
 }
 
 func (ctx *Metrics) SetGauge(value float64, subsystem, name, help string) {
-	ctx.gaugeMutex.Lock()
-	defer ctx.gaugeMutex.Unlock()
-
+	ctx.gaugeMutex.RLock()
 	key := fmt.Sprintf("%s/%s", subsystem, name)
 	gauge, exists := ctx.Gauges[key]
+	ctx.gaugeMutex.RUnlock()
 
 	if !exists {
-		gauge = prometheus.NewGauge(prometheus.GaugeOpts{
-			Namespace: ctx.Namespace,
-			Subsystem: subsystem,
-			Name:      name,
-			Help:      help,
-		})
-		ctx.Gauges[key] = gauge
-		err := prometheus.Register(gauge)
-		if err != nil {
-			ctx.Logger.Warn("MetricsSetGaugeFailed", fmt.Sprintf("SetGauge: Gauge registration %v failed: %v", gauge, err))
+		ctx.gaugeMutex.Lock()
+		if gauge, exists = ctx.Gauges[key]; !exists {
+			gauge = prometheus.NewGauge(prometheus.GaugeOpts{
+				Namespace: ctx.Namespace,
+				Subsystem: subsystem,
+				Name:      name,
+				Help:      help,
+			})
+			ctx.Gauges[key] = gauge
+			err := prometheus.Register(gauge)
+			if err != nil {
+				ctx.Logger.Warn("MetricsSetGaugeFailed", fmt.Sprintf("SetGauge: Gauge registration %v failed: %v", gauge, err))
+			}
 		}
+		ctx.gaugeMutex.Unlock()
 	}
 
 	gauge.Set(value)
 }
 
 func (ctx *Metrics) CountLabels(subsystem, name, help string, labels, values []string) {
-	ctx.countVecMutex.Lock()
-	defer ctx.countVecMutex.Unlock()
-
+	ctx.countVecMutex.RLock()
 	key := fmt.Sprintf("%s/%s", subsystem, name)
 	counter, exists := ctx.CounterVecs[key]
+	ctx.countVecMutex.RUnlock()
 
 	if !exists {
-		counter = prometheus.NewCounterVec(prometheus.CounterOpts{
-			Namespace: ctx.Namespace,
-			Subsystem: subsystem,
-			Name:      name,
-			Help:      help,
-		}, labels)
-		ctx.CounterVecs[key] = counter
-		err := prometheus.Register(counter)
-		if err != nil {
-			ctx.Logger.Warn("MetricsCounterLabelRegistrationFailed", fmt.Sprintf("CounterLabelHandler: Counter registration %v failed: %v", counter, err))
+		ctx.countVecMutex.Lock()
+		if counter, exists = ctx.CounterVecs[key]; !exists {
+			counter = prometheus.NewCounterVec(prometheus.CounterOpts{
+				Namespace: ctx.Namespace,
+				Subsystem: subsystem,
+				Name:      name,
+				Help:      help,
+			}, labels)
+			ctx.CounterVecs[key] = counter
+			err := prometheus.Register(counter)
+			if err != nil {
+				ctx.Logger.Warn("MetricsCounterLabelRegistrationFailed", fmt.Sprintf("CounterLabelHandler: Counter registration %v failed: %v", counter, err))
+			}
 		}
+		ctx.countMutex.Unlock()
 	}
 
 	counter.WithLabelValues(values...).Inc()
 }
 
 func (ctx *Metrics) IncreaseCounter(subsystem, name, help string, increment int) {
-	ctx.countMutex.Lock()
-	defer ctx.countMutex.Unlock()
-
+	ctx.countMutex.RLock()
 	key := fmt.Sprintf("%s/%s", subsystem, name)
 	counter, exists := ctx.Counters[key]
+	ctx.countMutex.RUnlock()
 
 	if !exists {
-		counter = prometheus.NewCounter(prometheus.CounterOpts{
-			Namespace: ctx.Namespace,
-			Subsystem: subsystem,
-			Name:      name,
-			Help:      help,
-		})
-		ctx.Counters[key] = counter
-		err := prometheus.Register(counter)
-		if err != nil {
-			ctx.Logger.Warn("MetricsIncreaseCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration failed: %v: %v", counter, err))
+		ctx.countMutex.Lock()
+		if counter, exists = ctx.Counters[key]; !exists {
+			counter = prometheus.NewCounter(prometheus.CounterOpts{
+				Namespace: ctx.Namespace,
+				Subsystem: subsystem,
+				Name:      name,
+				Help:      help,
+			})
+			ctx.Counters[key] = counter
+			err := prometheus.Register(counter)
+			if err != nil {
+				ctx.Logger.Warn("MetricsIncreaseCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration failed: %v: %v", counter, err))
+			}
 		}
+		ctx.countMutex.Unlock()
 	}
 
 	counter.Add(float64(increment))
 }
 
 func (ctx *Metrics) AddHistogram(subsystem, name, help string) *MetricsHistogram {
-	ctx.histMutex.Lock()
-	defer ctx.histMutex.Unlock()
+	return ctx.addHistogramWithBuckets(subsystem, name, help, prometheus.DefBuckets)
+}
 
+func (ctx *Metrics) AddHistogramWithCustomBuckets(subsystem, name, help string, buckets []float64) *MetricsHistogram {
+	return ctx.addHistogramWithBuckets(subsystem, name, help, buckets)
+}
+
+func (ctx *Metrics) addHistogramWithBuckets(subsystem, name, help string, buckets []float64) *MetricsHistogram {
+	ctx.histMutex.RLock()
 	key := fmt.Sprintf("%s/%s", subsystem, name)
-
 	sum, exists := ctx.Summaries[key]
-	if !exists {
-		sum = prometheus.NewSummary(prometheus.SummaryOpts{
-			Namespace:  ctx.Namespace,
-			Subsystem:  subsystem,
-			Name:       name + "_summary",
-			Help:       help,
-			Objectives: map[float64]float64{0.5: 0.05, 0.75: 0.025, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001, 0.999: 0.0001},
-		})
-		prometheus.MustRegister(sum)
-		ctx.Summaries[key] = sum
-	}
+	hist := ctx.Histograms[key]
+	ctx.histMutex.RUnlock()
 
-	hist, exists := ctx.Histograms[key]
 	if !exists {
-		hist = prometheus.NewHistogram(prometheus.HistogramOpts{
-			Namespace: ctx.Namespace,
-			Subsystem: subsystem,
-			Name:      name,
-			Help:      help,
-		})
-		prometheus.MustRegister(hist)
-		ctx.Histograms[key] = hist
+		ctx.histMutex.Lock()
+		if sum, exists = ctx.Summaries[key]; !exists {
+			// todo: remove Summary creation/observation
+			sum = prometheus.NewSummary(prometheus.SummaryOpts{
+				Namespace:  ctx.Namespace,
+				Subsystem:  subsystem,
+				Name:       name + "_summary",
+				Help:       help,
+				Objectives: map[float64]float64{0.5: 0.05, 0.75: 0.025, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001, 0.999: 0.0001},
+			})
+			prometheus.MustRegister(sum)
+			ctx.Summaries[key] = sum
+
+			hist = prometheus.NewHistogram(prometheus.HistogramOpts{
+				Namespace: ctx.Namespace,
+				Subsystem: subsystem,
+				Name:      name,
+				Help:      help,
+				Buckets:   buckets,
+			})
+			prometheus.MustRegister(hist)
+			ctx.Histograms[key] = hist
+		}
+		ctx.histMutex.Unlock()
 	}
 
 	mh := MetricsHistogram{
@@ -190,4 +213,8 @@ func (histogram *MetricsHistogram) RecordTimeElapsed(start time.Time) {
 	elapsed := float64(time.Since(start).Seconds())
 	histogram.hist.Observe(elapsed)         // The default histogram buckets are recorded in seconds
 	histogram.sum.Observe(elapsed * 1000.0) // While we have summaries in milliseconds
+}
+
+func (histogram *MetricsHistogram) Observe(value float64) {
+	histogram.hist.Observe(value)
 }
