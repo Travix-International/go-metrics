@@ -1,4 +1,4 @@
-package metrics // whitebox test
+package metrics // white-box test
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 )
 
 func TestMetrics_AddHistogram(t *testing.T) {
-	log, _ := logger.New(map[string]string{})
+	log := logger.New()
 	sut := NewMetrics("ns", log)
 
 	result := sut.AddHistogram("s1", "n1", "h1")
@@ -20,7 +20,7 @@ func TestMetrics_AddHistogram(t *testing.T) {
 }
 
 func TestMetrics_AddHistogramWithCustomBuckets(t *testing.T) {
-	log, _ := logger.New(map[string]string{})
+	log := logger.New()
 	sut := NewMetrics("ns", log)
 
 	result := sut.AddHistogramWithCustomBuckets("s2", "n2", "h2", []float64{10, 20, 30.5})
@@ -34,7 +34,7 @@ func TestMetrics_AddHistogramWithCustomBuckets(t *testing.T) {
 
 func BenchmarkMetrics_AddHistogram(b *testing.B) {
 	prometheus.DefaultRegisterer = prometheus.NewRegistry()
-	log, _ := logger.New(map[string]string{})
+	log := logger.New()
 	sut := NewMetrics("ns", log)
 	sut.AddHistogram("s3", "n3", "h3") // this is where we really create the histogram
 	b.ResetTimer()

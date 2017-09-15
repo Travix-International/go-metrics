@@ -10,7 +10,7 @@ import (
 )
 
 type (
-	// Metrics provides a set of conviencience functions that wrap Prometheus
+	// Metrics provides a set of convenience functions that wrap Prometheus
 	Metrics struct {
 		Namespace     string
 		Counters      map[string]prometheus.Counter
@@ -126,7 +126,7 @@ func (ctx *Metrics) CountLabels(subsystem, name, help string, labels, values []s
 				ctx.Logger.Warn("MetricsCounterLabelRegistrationFailed", fmt.Sprintf("CounterLabelHandler: Counter registration %v failed: %v", counter, err))
 			}
 		}
-		ctx.countMutex.Unlock()
+		ctx.countVecMutex.Unlock()
 	}
 
 	counter.WithLabelValues(values...).Inc()
