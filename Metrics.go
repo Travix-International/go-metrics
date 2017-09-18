@@ -69,7 +69,8 @@ func (ctx *Metrics) Count(subsystem, name, help string) {
 			ctx.Counters[key] = counter
 			err := prometheus.Register(counter)
 			if err != nil {
-				ctx.Logger.Warn("MetricsCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration %v failed: %v", counter, err))
+				ctx.Logger.Warn("MetricsCounterRegistrationFailed",
+					fmt.Sprintf("CounterHandler: Counter registration %v failed: %v", counter, err))
 			}
 		}
 		ctx.countMutex.Unlock()
@@ -96,7 +97,8 @@ func (ctx *Metrics) SetGauge(value float64, subsystem, name, help string) {
 			ctx.Gauges[key] = gauge
 			err := prometheus.Register(gauge)
 			if err != nil {
-				ctx.Logger.Warn("MetricsSetGaugeFailed", fmt.Sprintf("SetGauge: Gauge registration %v failed: %v", gauge, err))
+				ctx.Logger.Warn("MetricsSetGaugeFailed",
+					fmt.Sprintf("SetGauge: Gauge registration %v failed: %v", gauge, err))
 			}
 		}
 		ctx.gaugeMutex.Unlock()
@@ -123,7 +125,8 @@ func (ctx *Metrics) CountLabels(subsystem, name, help string, labels, values []s
 			ctx.CounterVecs[key] = counter
 			err := prometheus.Register(counter)
 			if err != nil {
-				ctx.Logger.Warn("MetricsCounterLabelRegistrationFailed", fmt.Sprintf("CounterLabelHandler: Counter registration %v failed: %v", counter, err))
+				ctx.Logger.Warn("MetricsCounterLabelRegistrationFailed",
+					fmt.Sprintf("CounterLabelHandler: Counter registration %v failed: %v", counter, err))
 			}
 		}
 		ctx.countVecMutex.Unlock()
@@ -150,7 +153,8 @@ func (ctx *Metrics) IncreaseCounter(subsystem, name, help string, increment int)
 			ctx.Counters[key] = counter
 			err := prometheus.Register(counter)
 			if err != nil {
-				ctx.Logger.Warn("MetricsIncreaseCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration failed: %v: %v", counter, err))
+				ctx.Logger.Warn("MetricsIncreaseCounterRegistrationFailed",
+					fmt.Sprintf("CounterHandler: Counter registration failed: %v: %v", counter, err))
 			}
 		}
 		ctx.countMutex.Unlock()
@@ -213,6 +217,15 @@ func (histogram *MetricsHistogram) RecordTimeElapsed(start time.Time) {
 	elapsed := float64(time.Since(start).Seconds())
 	histogram.hist.Observe(elapsed)         // The default histogram buckets are recorded in seconds
 	histogram.sum.Observe(elapsed * 1000.0) // While we have summaries in milliseconds
+}
+
+func (histogram *MetricsHistogram) RecordDuration(start time.Time, unit time.Duration) {
+	since := time.Since(start)
+	elapsedSeconds := float64(since.Seconds())
+	elapsedUnits := float64(since.Truncate(unit))
+
+	histogram.hist.Observe(elapsedUnits)
+	histogram.sum.Observe(elapsedSeconds * 1000.0)
 }
 
 func (histogram *MetricsHistogram) Observe(value float64) {
