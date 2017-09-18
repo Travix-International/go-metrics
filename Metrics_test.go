@@ -2,11 +2,11 @@ package metrics // white-box test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/Travix-International/logger"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
-	"time"
 )
 
 func TestMetrics_AddHistogram(t *testing.T) {
