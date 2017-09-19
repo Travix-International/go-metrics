@@ -1,6 +1,5 @@
 .PHONY: restore run-tests cover vet lint
 
-COVERALLS_TOKEN := "DJljOZEYgGX0vkvoPCVNxyIupLJ6VscoO"
 GITHUB_API_TOKEN := ""
 VERSION :=""
 
