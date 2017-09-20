@@ -10,7 +10,7 @@ import (
 )
 
 type (
-	// Metrics provides a set of conviencience functions that wrap Prometheus
+	// Metrics provides a set of convenience functions that wrap Prometheus
 	Metrics struct {
 		Namespace     string
 		Counters      map[string]prometheus.Counter
@@ -51,6 +51,7 @@ func NewMetrics(namespace string, logger *logger.Logger) *Metrics {
 	return &m
 }
 
+// Count increases the counter for the specified subsystem and name.
 func (ctx *Metrics) Count(subsystem, name, help string) {
 	ctx.countMutex.RLock()
 	key := fmt.Sprintf("%s/%s", subsystem, name)
@@ -69,7 +70,8 @@ func (ctx *Metrics) Count(subsystem, name, help string) {
 			ctx.Counters[key] = counter
 			err := prometheus.Register(counter)
 			if err != nil {
-				ctx.Logger.Warn("MetricsCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration %v failed: %v", counter, err))
+				ctx.Logger.Warn("MetricsCounterRegistrationFailed",
+					fmt.Sprintf("CounterHandler: Counter registration %v failed: %v", counter, err))
 			}
 		}
 		ctx.countMutex.Unlock()
@@ -78,6 +80,7 @@ func (ctx *Metrics) Count(subsystem, name, help string) {
 	counter.Inc()
 }
 
+// SetGauge sets the gauge value for the specified subsystem and name.
 func (ctx *Metrics) SetGauge(value float64, subsystem, name, help string) {
 	ctx.gaugeMutex.RLock()
 	key := fmt.Sprintf("%s/%s", subsystem, name)
@@ -96,7 +99,8 @@ func (ctx *Metrics) SetGauge(value float64, subsystem, name, help string) {
 			ctx.Gauges[key] = gauge
 			err := prometheus.Register(gauge)
 			if err != nil {
-				ctx.Logger.Warn("MetricsSetGaugeFailed", fmt.Sprintf("SetGauge: Gauge registration %v failed: %v", gauge, err))
+				ctx.Logger.Warn("MetricsSetGaugeFailed",
+					fmt.Sprintf("SetGauge: Gauge registration %v failed: %v", gauge, err))
 			}
 		}
 		ctx.gaugeMutex.Unlock()
@@ -105,6 +109,7 @@ func (ctx *Metrics) SetGauge(value float64, subsystem, name, help string) {
 	gauge.Set(value)
 }
 
+// CountLabels increases the counter for the specified subsystem and name and adds the specified labels with values.
 func (ctx *Metrics) CountLabels(subsystem, name, help string, labels, values []string) {
 	ctx.countVecMutex.RLock()
 	key := fmt.Sprintf("%s/%s", subsystem, name)
@@ -123,15 +128,17 @@ func (ctx *Metrics) CountLabels(subsystem, name, help string, labels, values []s
 			ctx.CounterVecs[key] = counter
 			err := prometheus.Register(counter)
 			if err != nil {
-				ctx.Logger.Warn("MetricsCounterLabelRegistrationFailed", fmt.Sprintf("CounterLabelHandler: Counter registration %v failed: %v", counter, err))
+				ctx.Logger.Warn("MetricsCounterLabelRegistrationFailed",
+					fmt.Sprintf("CounterLabelHandler: Counter registration %v failed: %v", counter, err))
 			}
 		}
-		ctx.countMutex.Unlock()
+		ctx.countVecMutex.Unlock()
 	}
 
 	counter.WithLabelValues(values...).Inc()
 }
 
+// IncreaseCounter increases the counter for the specified subsystem and name with the specified increment.
 func (ctx *Metrics) IncreaseCounter(subsystem, name, help string, increment int) {
 	ctx.countMutex.RLock()
 	key := fmt.Sprintf("%s/%s", subsystem, name)
@@ -150,7 +157,8 @@ func (ctx *Metrics) IncreaseCounter(subsystem, name, help string, increment int)
 			ctx.Counters[key] = counter
 			err := prometheus.Register(counter)
 			if err != nil {
-				ctx.Logger.Warn("MetricsIncreaseCounterRegistrationFailed", fmt.Sprintf("CounterHandler: Counter registration failed: %v: %v", counter, err))
+				ctx.Logger.Warn("MetricsIncreaseCounterRegistrationFailed",
+					fmt.Sprintf("CounterHandler: Counter registration failed: %v: %v", counter, err))
 			}
 		}
 		ctx.countMutex.Unlock()
@@ -159,10 +167,12 @@ func (ctx *Metrics) IncreaseCounter(subsystem, name, help string, increment int)
 	counter.Add(float64(increment))
 }
 
+// AddHistogram returns the MetricsHistogram for the specified subsystem and name.
 func (ctx *Metrics) AddHistogram(subsystem, name, help string) *MetricsHistogram {
 	return ctx.addHistogramWithBuckets(subsystem, name, help, prometheus.DefBuckets)
 }
 
+// AddHistogramWithCustomBuckets returns the MetricsHistogram for the specified subsystem and name with the specified buckets.
 func (ctx *Metrics) AddHistogramWithCustomBuckets(subsystem, name, help string, buckets []float64) *MetricsHistogram {
 	return ctx.addHistogramWithBuckets(subsystem, name, help, buckets)
 }
@@ -209,12 +219,26 @@ func (ctx *Metrics) addHistogramWithBuckets(subsystem, name, help string, bucket
 	return &mh
 }
 
+// RecordTimeElapsed adds the elapsed time since the specified start to the histogram in seconds and to the linked
+// summary in milliseconds.
 func (histogram *MetricsHistogram) RecordTimeElapsed(start time.Time) {
 	elapsed := float64(time.Since(start).Seconds())
 	histogram.hist.Observe(elapsed)         // The default histogram buckets are recorded in seconds
 	histogram.sum.Observe(elapsed * 1000.0) // While we have summaries in milliseconds
 }
 
+// RecordDuration adds the elapsed time since the specified start to the histogram in the specified unit of time
+// and to the linked summary in milliseconds.
+func (histogram *MetricsHistogram) RecordDuration(start time.Time, unit time.Duration) {
+	since := time.Since(start)
+	elapsedSeconds := float64(since.Seconds())
+	elapsedUnits := float64(since.Truncate(unit))
+
+	histogram.hist.Observe(elapsedUnits)
+	histogram.sum.Observe(elapsedSeconds * 1000.0)
+}
+
+// Observe adds the specified value to the histogram.
 func (histogram *MetricsHistogram) Observe(value float64) {
 	histogram.hist.Observe(value)
 }
