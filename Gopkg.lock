@@ -4,8 +4,8 @@
 [[projects]]
   name = "github.com/Travix-International/logger"
   packages = ["."]
-  revision = "aba10dbc638a4a1bf04775f8ad6804282c95ecc5"
-  version = "v0.5.0"
+  revision = "509996f71acd7c13931daff8f104ef1552694df9"
+  version = "v0.6.0"
 
 [[projects]]
   branch = "master"
@@ -23,7 +23,7 @@
   branch = "master"
   name = "github.com/golang/protobuf"
   packages = ["proto"]
-  revision = "11b8df160996e00fd4b55cbaafb3d84ec6d50fa8"
+  revision = "130e6b02ab059e7b717a096f397c5b60111cae74"
 
 [[projects]]
   name = "github.com/matttproud/golang_protobuf_extensions"
@@ -70,6 +70,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ae592ec69b2841646e1e09f6235d5a84110414ed7c6fc2e07bbfa4b43f6f6d6c"
+  inputs-digest = "393d44cd5a60b12de568d4468bd94663577e05eb5891d9557829f4f8cdf8cd9b"
   solver-name = "gps-cdcl"
   solver-version = 1
