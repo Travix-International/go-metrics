@@ -22,6 +22,34 @@ func TestMetrics_AddHistogramWithCustomBuckets(t *testing.T) {
 	result.Observe(25)
 }
 
+func TestMetrics_AddHistogramVecWithCustomBuckets(t *testing.T) {
+	log, _ := logger.New(make(map[string]string))
+	sut := NewMetrics("ns", log)
+	labels := []string{"lbl1", "lbl2", "lbl3"}
+	values := []string{"val1", "val2", "val3"}
+
+	result := sut.AddHistogramVecWithCustomBuckets("s3", "n3", "h3", labels, values,
+		[]float64{10, 20, 30.5})
+
+	assert.Equal(t, "s3/n3", result.Key)
+	assert.NotNil(t, result.histVec)
+
+	result.Observe(25)
+}
+
+func TestMetrics_AddSummaryVecWithCustomObjectives(t *testing.T) {
+	log, _ := logger.New(make(map[string]string))
+	sut := NewMetrics("ns", log)
+	labels := []string{"lbl1", "lbl2", "lbl3"}
+	values := []string{"val1", "val2", "val3"}
+
+	result := sut.AddSummaryVecWithCustomObjectives("s4", "n4", "h4", labels, values,
+		map[float64]float64{0.5: 0.05, 0.75: 0.025, 0.9: 0.01, 0.99: 0.001})
+
+	assert.Equal(t, "s4/n4", result.Key)
+	assert.NotNil(t, result.summaryVec)
+}
+
 func TestMetrics_Count(t *testing.T) {
 	sys := "count"
 	log, _ := logger.New(make(map[string]string))
@@ -116,6 +144,24 @@ func TestMetrics_AddHistogramVec(t *testing.T) {
 	vec.RecordDuration(start, time.Millisecond)
 
 	assert.Equal(t, "addhistvec/addhistvec", vec.Key)
+	assert.Equal(t, labels, vec.Labels)
+	assert.NotNil(t, values, vec.LabelValues)
+}
+
+func TestMetrics_AddSummaryVec(t *testing.T) {
+	log, _ := logger.New(make(map[string]string))
+	sut := NewMetrics("ns", log)
+	sys := "addsumvec"
+	start := time.Now().Add(+1 * time.Second)
+	labels := []string{"label1", "label2", "label3"}
+	values := []string{"val1", "val2", "val3"}
+
+	vec := sut.AddSummaryVec(sys, sys, sys, labels, values)
+
+	// Act
+	vec.RecordTimeElapsed(start)
+
+	assert.Equal(t, "addsumvec/addsumvec", vec.Key)
 	assert.Equal(t, labels, vec.Labels)
 	assert.NotNil(t, values, vec.LabelValues)
 }

@@ -12,19 +12,21 @@ import (
 type (
 	// Metrics provides a set of convenience functions that wrap Prometheus
 	Metrics struct {
-		Namespace     string
-		Counters      map[string]prometheus.Counter
-		CounterVecs   map[string]*prometheus.CounterVec
-		Summaries     map[string]prometheus.Summary
-		Histograms    map[string]prometheus.Histogram
-		HistogramVecs map[string]*prometheus.HistogramVec
-		Gauges        map[string]prometheus.Gauge
-		Logger        *logger.Logger
-		countMutex    *sync.RWMutex
-		countVecMutex *sync.RWMutex
-		histMutex     *sync.RWMutex
-		histVecMutex  *sync.RWMutex
-		gaugeMutex    *sync.RWMutex
+		Namespace       string
+		Counters        map[string]prometheus.Counter
+		CounterVecs     map[string]*prometheus.CounterVec
+		Summaries       map[string]prometheus.Summary
+		SummaryVecs     map[string]*prometheus.SummaryVec
+		Histograms      map[string]prometheus.Histogram
+		HistogramVecs   map[string]*prometheus.HistogramVec
+		Gauges          map[string]prometheus.Gauge
+		Logger          *logger.Logger
+		countMutex      *sync.RWMutex
+		countVecMutex   *sync.RWMutex
+		histMutex       *sync.RWMutex
+		histVecMutex    *sync.RWMutex
+		summaryVecMutex *sync.RWMutex
+		gaugeMutex      *sync.RWMutex
 	}
 
 	// MetricsHistogram combines a histogram and summary
@@ -34,33 +36,48 @@ type (
 		sum  prometheus.Summary
 	}
 
-	// HistogramVec combines a histogramVec and summary
+	// HistogramVec wraps prometheus.HistogramVec
 	HistogramVec struct {
 		Key         string
 		Labels      []string
 		LabelValues []string
 		histVec     *prometheus.HistogramVec
 	}
+
+	// SummaryVec wraps prometheus.SummaryVec
+	SummaryVec struct {
+		Key         string
+		Labels      []string
+		LabelValues []string
+		summaryVec  *prometheus.SummaryVec
+	}
 )
 
 // NewMetrics will instantiate a new Metrics wrapper object
 func NewMetrics(namespace string, logger *logger.Logger) *Metrics {
 	m := Metrics{
-		Namespace:     namespace,
-		Logger:        logger,
-		Counters:      make(map[string]prometheus.Counter),
-		CounterVecs:   make(map[string]*prometheus.CounterVec),
-		Histograms:    make(map[string]prometheus.Histogram),
-		HistogramVecs: make(map[string]*prometheus.HistogramVec),
-		Summaries:     make(map[string]prometheus.Summary),
-		Gauges:        make(map[string]prometheus.Gauge),
-		countMutex:    &sync.RWMutex{},
-		countVecMutex: &sync.RWMutex{},
-		histMutex:     &sync.RWMutex{},
-		histVecMutex:  &sync.RWMutex{},
-		gaugeMutex:    &sync.RWMutex{},
+		Namespace:       namespace,
+		Logger:          logger,
+		Counters:        make(map[string]prometheus.Counter),
+		CounterVecs:     make(map[string]*prometheus.CounterVec),
+		Histograms:      make(map[string]prometheus.Histogram),
+		HistogramVecs:   make(map[string]*prometheus.HistogramVec),
+		Summaries:       make(map[string]prometheus.Summary),
+		SummaryVecs:     make(map[string]*prometheus.SummaryVec),
+		Gauges:          make(map[string]prometheus.Gauge),
+		countMutex:      &sync.RWMutex{},
+		countVecMutex:   &sync.RWMutex{},
+		histMutex:       &sync.RWMutex{},
+		histVecMutex:    &sync.RWMutex{},
+		summaryVecMutex: &sync.RWMutex{},
+		gaugeMutex:      &sync.RWMutex{},
 	}
 	return &m
+}
+
+// DefaultObjectives returns a default map of quantiles to be used in summaries.
+func DefaultObjectives() map[float64]float64 {
+	return map[float64]float64{0.5: 0.05, 0.75: 0.025, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001, 0.999: 0.0001}
 }
 
 // Count increases the counter for the specified subsystem and name.
@@ -205,7 +222,7 @@ func (m *Metrics) addHistogramWithBuckets(subsystem, name, help string, buckets 
 				Subsystem:  subsystem,
 				Name:       name + "_summary",
 				Help:       help,
-				Objectives: map[float64]float64{0.5: 0.05, 0.75: 0.025, 0.9: 0.01, 0.95: 0.005, 0.99: 0.001, 0.999: 0.0001},
+				Objectives: DefaultObjectives(),
 			})
 			prometheus.MustRegister(sum)
 			m.Summaries[key] = sum
@@ -236,7 +253,7 @@ func (m *Metrics) AddHistogramVec(subsystem, name, help string, labels, labelVal
 	return m.addHistogramVecWithBuckets(subsystem, name, help, labels, labelValues, prometheus.DefBuckets)
 }
 
-// AddHistogramWithCustomBuckets returns the HistogramVec for the specified subsystem and name with the specified buckets.
+// AddHistogramVecWithCustomBuckets returns the HistogramVec for the specified subsystem and name with the specified buckets.
 func (m *Metrics) AddHistogramVecWithCustomBuckets(subsystem, name, help string, labels, labelValues []string,
 	buckets []float64) *HistogramVec {
 
@@ -274,6 +291,49 @@ func (m *Metrics) addHistogramVecWithBuckets(subsystem, name, help string, label
 	return &mh
 }
 
+// AddSummaryVec returns the SummaryVec for the specified subsystem and name.
+func (m *Metrics) AddSummaryVec(subsystem, name, help string, labels, labelValues []string) *SummaryVec {
+	return m.addSummaryVecWithObjectives(subsystem, name, help, labels, labelValues, DefaultObjectives())
+}
+
+// AddSummaryVecWithCustomObjectives returns the SummaryVec for the specified subsystem and name with the specified objectives.
+func (m *Metrics) AddSummaryVecWithCustomObjectives(subsystem, name, help string, labels, labelValues []string,
+	objectives map[float64]float64) *SummaryVec {
+
+	return m.addSummaryVecWithObjectives(subsystem, name, help, labels, labelValues, objectives)
+}
+
+func (m *Metrics) addSummaryVecWithObjectives(subsystem, name, help string, labels, labelValues []string,
+	objectives map[float64]float64) *SummaryVec {
+
+	m.summaryVecMutex.RLock()
+	key := fmt.Sprintf("%s/%s", subsystem, name)
+	vec, exists := m.SummaryVecs[key]
+	m.summaryVecMutex.RUnlock()
+
+	if !exists {
+		m.summaryVecMutex.Lock()
+		vec = prometheus.NewSummaryVec(prometheus.SummaryOpts{
+			Namespace:  m.Namespace,
+			Subsystem:  subsystem,
+			Name:       name + "_summary",
+			Help:       help,
+			Objectives: objectives,
+		}, labels)
+		prometheus.MustRegister(vec)
+		m.SummaryVecs[key] = vec
+		m.summaryVecMutex.Unlock()
+	}
+
+	mh := SummaryVec{
+		Key:         key,
+		Labels:      labels,
+		LabelValues: labelValues,
+		summaryVec:  vec,
+	}
+	return &mh
+}
+
 // RecordTimeElapsed adds the elapsed time since the specified start to the histogram in seconds and to the linked
 // summary in milliseconds.
 func (histogram *MetricsHistogram) RecordTimeElapsed(start time.Time) {
@@ -298,15 +358,13 @@ func (histogram *MetricsHistogram) Observe(value float64) {
 	histogram.hist.Observe(value)
 }
 
-// RecordTimeElapsed adds the elapsed time since the specified start to the histogram in seconds and to the linked
-// summary in milliseconds.
+// RecordTimeElapsed adds the elapsed time since the specified start to the histogram in seconds.
 func (vec *HistogramVec) RecordTimeElapsed(start time.Time) {
 	elapsed := float64(time.Since(start).Seconds())
 	vec.Observe(elapsed) // The default histogram buckets are recorded in seconds
 }
 
-// RecordDuration adds the elapsed time since the specified start to the histogram in the specified unit of time
-// and to the linked summary in milliseconds.
+// RecordDuration adds the elapsed time since the specified start to the histogram in the specified unit of time.
 func (vec *HistogramVec) RecordDuration(start time.Time, unit time.Duration) {
 	since := time.Since(start)
 	elapsedUnits := float64(since.Truncate(unit))
@@ -317,4 +375,10 @@ func (vec *HistogramVec) RecordDuration(start time.Time, unit time.Duration) {
 // Observe adds the specified value to the histogram.
 func (vec *HistogramVec) Observe(value float64) {
 	vec.histVec.WithLabelValues(vec.LabelValues...).Observe(value)
+}
+
+// RecordTimeElapsed adds the elapsed time since the specified start to the summary in milliseconds.
+func (vec *SummaryVec) RecordTimeElapsed(start time.Time) {
+	elapsed := float64(time.Since(start).Seconds())
+	vec.summaryVec.WithLabelValues(vec.LabelValues...).Observe(elapsed * 1000.0) // Summaries are in milliseconds
 }
