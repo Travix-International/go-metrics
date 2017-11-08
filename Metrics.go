@@ -316,7 +316,7 @@ func (m *Metrics) addSummaryVecWithObjectives(subsystem, name, help string, labe
 		vec = prometheus.NewSummaryVec(prometheus.SummaryOpts{
 			Namespace:  m.Namespace,
 			Subsystem:  subsystem,
-			Name:       name + "_summary",
+			Name:       name,
 			Help:       help,
 			Objectives: objectives,
 		}, labels)
