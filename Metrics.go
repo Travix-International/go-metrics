@@ -346,11 +346,11 @@ func (histogram *MetricsHistogram) RecordTimeElapsed(start time.Time) {
 // and to the linked summary in milliseconds.
 func (histogram *MetricsHistogram) RecordDuration(start time.Time, unit time.Duration) {
 	since := time.Since(start)
-	elapsedSeconds := float64(since.Seconds())
+	elapsedMilliseconds := float64(since.Truncate(time.Millisecond))
 	elapsedUnits := float64(since.Truncate(unit))
 
 	histogram.hist.Observe(elapsedUnits)
-	histogram.sum.Observe(elapsedSeconds * 1000.0)
+	histogram.sum.Observe(elapsedMilliseconds)
 }
 
 // Observe adds the specified value to the histogram.
@@ -379,6 +379,15 @@ func (vec *HistogramVec) Observe(value float64) {
 
 // RecordTimeElapsed adds the elapsed time since the specified start to the summary in milliseconds.
 func (vec *SummaryVec) RecordTimeElapsed(start time.Time) {
-	elapsed := float64(time.Since(start).Seconds())
-	vec.summaryVec.WithLabelValues(vec.LabelValues...).Observe(elapsed * 1000.0) // Summaries are in milliseconds
+	since := time.Since(start)
+	elapsed := float64(since.Truncate(time.Millisecond))
+	vec.summaryVec.WithLabelValues(vec.LabelValues...).Observe(elapsed)
+}
+
+// RecordDuration adds the elapsed time since the specified start to the histogram in the specified unit of time.
+func (vec *SummaryVec) RecordDuration(start time.Time, unit time.Duration) {
+	since := time.Since(start)
+	elapsedUnits := float64(since.Truncate(unit))
+
+	vec.summaryVec.WithLabelValues(vec.LabelValues...).Observe(elapsedUnits)
 }

@@ -160,6 +160,7 @@ func TestMetrics_AddSummaryVec(t *testing.T) {
 
 	// Act
 	vec.RecordTimeElapsed(start)
+	vec.RecordDuration(start, time.Microsecond)
 
 	assert.Equal(t, "addsumvec/addsumvec", vec.Key)
 	assert.Equal(t, labels, vec.Labels)
