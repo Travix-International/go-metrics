@@ -9,19 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMetrics_AddHistogram(t *testing.T) {
-	log := logger.New()
-	sut := NewMetrics("ns", log)
-
-	result := sut.AddHistogram("s1", "n1", "h1")
-
-	assert.Equal(t, "s1/n1", result.Key)
-	assert.NotNil(t, result.hist)
-	assert.NotNil(t, result.sum)
-}
-
 func TestMetrics_AddHistogramWithCustomBuckets(t *testing.T) {
-	log := logger.New()
+	log, _ := logger.New(make(map[string]string))
 	sut := NewMetrics("ns", log)
 
 	result := sut.AddHistogramWithCustomBuckets("s2", "n2", "h2", []float64{10, 20, 30.5})
@@ -33,9 +22,37 @@ func TestMetrics_AddHistogramWithCustomBuckets(t *testing.T) {
 	result.Observe(25)
 }
 
+func TestMetrics_AddHistogramVecWithCustomBuckets(t *testing.T) {
+	log, _ := logger.New(make(map[string]string))
+	sut := NewMetrics("ns", log)
+	labels := []string{"lbl1", "lbl2", "lbl3"}
+	values := []string{"val1", "val2", "val3"}
+
+	result := sut.AddHistogramVecWithCustomBuckets("s3", "n3", "h3", labels, values,
+		[]float64{10, 20, 30.5})
+
+	assert.Equal(t, "s3/n3", result.Key)
+	assert.NotNil(t, result.histVec)
+
+	result.Observe(25)
+}
+
+func TestMetrics_AddSummaryVecWithCustomObjectives(t *testing.T) {
+	log, _ := logger.New(make(map[string]string))
+	sut := NewMetrics("ns", log)
+	labels := []string{"lbl1", "lbl2", "lbl3"}
+	values := []string{"val1", "val2", "val3"}
+
+	result := sut.AddSummaryVecWithCustomObjectives("s4", "n4", "h4", labels, values,
+		map[float64]float64{0.5: 0.05, 0.75: 0.025, 0.9: 0.01, 0.99: 0.001})
+
+	assert.Equal(t, "s4/n4", result.Key)
+	assert.NotNil(t, result.summaryVec)
+}
+
 func TestMetrics_Count(t *testing.T) {
 	sys := "count"
-	log := logger.New()
+	log, _ := logger.New(make(map[string]string))
 	sut := NewMetrics(sys, log)
 
 	sut.Count(sys, sys, sys)
@@ -59,7 +76,7 @@ func TestMetrics_Count(t *testing.T) {
 
 func TestMetrics_SetGauge(t *testing.T) {
 	sys := "gauge"
-	log := logger.New()
+	log, _ := logger.New(make(map[string]string))
 	sut := NewMetrics(sys, log)
 
 	sut.SetGauge(5, sys, sys, sys)
@@ -77,7 +94,7 @@ func TestMetrics_SetGauge(t *testing.T) {
 
 func TestMetrics_CountLabels(t *testing.T) {
 	sys := "labels"
-	log := logger.New()
+	log, _ := logger.New(make(map[string]string))
 	sut := NewMetrics(sys, log)
 	labels := []string{"lbl1", "lbl2", "lbl3"}
 	values := []string{"val1", "val2", "val3"}
@@ -95,10 +112,10 @@ func TestMetrics_CountLabels(t *testing.T) {
 	assert.Equal(t, 3, len(sut.CounterVecs))
 }
 
-func TestMetrics_RecordTimeElapsed(t *testing.T) {
-	log := logger.New()
+func TestMetrics_AddHistogram(t *testing.T) {
+	log, _ := logger.New(make(map[string]string))
 	sut := NewMetrics("ns", log)
-	sys := "elapsed"
+	sys := "addhist"
 	start := time.Now().Add(+1 * time.Second)
 
 	hist := sut.AddHistogram(sys, sys, sys)
@@ -107,14 +124,54 @@ func TestMetrics_RecordTimeElapsed(t *testing.T) {
 	hist.RecordTimeElapsed(start)
 	hist.RecordDuration(start, time.Millisecond)
 
-	// Alas, nothing to assert!
+	assert.Equal(t, "addhist/addhist", hist.Key)
+	assert.NotNil(t, hist.hist)
+	assert.NotNil(t, hist.sum)
+}
+
+func TestMetrics_AddHistogramVec(t *testing.T) {
+	log, _ := logger.New(make(map[string]string))
+	sut := NewMetrics("ns", log)
+	sys := "addhistvec"
+	start := time.Now().Add(+1 * time.Second)
+	labels := []string{"label1", "label2", "label3"}
+	values := []string{"val1", "val2", "val3"}
+
+	vec := sut.AddHistogramVec(sys, sys, sys, labels, values)
+
+	// Act
+	vec.RecordTimeElapsed(start)
+	vec.RecordDuration(start, time.Millisecond)
+
+	assert.Equal(t, "addhistvec/addhistvec", vec.Key)
+	assert.Equal(t, labels, vec.Labels)
+	assert.NotNil(t, values, vec.LabelValues)
+}
+
+func TestMetrics_AddSummaryVec(t *testing.T) {
+	log, _ := logger.New(make(map[string]string))
+	sut := NewMetrics("ns", log)
+	sys := "addsumvec"
+	start := time.Now().Add(+1 * time.Second)
+	labels := []string{"label1", "label2", "label3"}
+	values := []string{"val1", "val2", "val3"}
+
+	vec := sut.AddSummaryVec(sys, sys, sys, labels, values)
+
+	// Act
+	vec.RecordTimeElapsed(start)
+	vec.RecordDuration(start, time.Microsecond)
+
+	assert.Equal(t, "addsumvec/addsumvec", vec.Key)
+	assert.Equal(t, labels, vec.Labels)
+	assert.NotNil(t, values, vec.LabelValues)
 }
 
 /* Benchmarks */
 
 func BenchmarkMetrics_AddHistogram(b *testing.B) {
 	prometheus.DefaultRegisterer = prometheus.NewRegistry()
-	log := logger.New()
+	log, _ := logger.New(make(map[string]string))
 	sut := NewMetrics("ns", log)
 	sut.AddHistogram("s3", "n3", "h3") // this is where we really create the histogram
 	b.ResetTimer()
